@@ -6,7 +6,7 @@ from typing import Optional
 import openai
 from dotenv import load_dotenv
 
-# LangCache imports
+# LangCache imports (preserved for future use)
 try:
     from langcache import LangCache
     cache_available = True
@@ -14,8 +14,27 @@ except ImportError:
     cache_available = False
     print("⚠️  LangCache not available. Install with: pip install langcache")
 
+# Feature flag for LangCache
+USE_LANGCACHE = os.getenv("USE_LANGCACHE", "false").lower() == "true"
+
 # Load environment variables
 load_dotenv()
+
+# Memory system imports (Redis-based)
+try:
+    from memory.history import add_message, get_context, clear_conversation
+    memory_available = True
+    print("✅ Redis-based conversation memory initialized")
+except ImportError:
+    memory_available = False
+    print("⚠️  Memory system not available")
+    # Fallback functions
+    def add_message(session_id, role, text, intent="unknown", score=0.0):
+        pass
+    def get_context(session_id, limit=6):
+        return None
+    def clear_conversation(session_id):
+        pass
 
 # Initialize FastAPI app
 app = FastAPI(title="Chat API", description="Simple chat API with OpenAI integration and caching")
@@ -55,14 +74,32 @@ if cache_available:
         print(f"⚠️  Failed to initialize LangCache: {e}")
         cache_available = False
 
+# Import orchestrator
+try:
+    from orchestrator import handle_turn
+    orchestrator_available = True
+except ImportError as e:
+    orchestrator_available = False
+    print(f"⚠️  Orchestrator not available: {e}")
+
 # Pydantic models
 class ChatRequest(BaseModel):
     userId: Optional[str] = None
+    sessionId: Optional[str] = None
     text: str
+    meta: Optional[dict] = None
 
 class ChatResponse(BaseModel):
     reply: str
     userId: Optional[str] = None
+    sessionId: Optional[str] = None
+    action: Optional[str] = None
+    askedSlot: Optional[str] = None
+    pending: Optional[list] = None
+    router: Optional[dict] = None
+    proposal: Optional[dict] = None
+    model: Optional[str] = None
+    showFeedback: Optional[bool] = False  # Show "Was this helpful?" when true
 
 @app.get("/")
 async def root():
@@ -80,26 +117,81 @@ async def chat(request: ChatRequest):
             raise HTTPException(status_code=500, detail="OpenAI API key not configured")
         
         query = request.text.strip()
-        reply = None
+        session_id = request.sessionId or f"session_{request.userId or 'anon'}_{int(__import__('time').time())}"
         
-        # Check cache first if available
-        if cache_available and lang_cache:
+        # Check cache first if available (only if USE_LANGCACHE is enabled)
+        if USE_LANGCACHE and cache_available and lang_cache:
             try:
                 cache_result = lang_cache.search(prompt=query, similarity_threshold=0.8)
                 
                 if cache_result.data:
                     # Cache hit - return cached response
                     cached_entry = cache_result.data[0]
-                    reply = cached_entry.response
                     print(f"🎯 CACHE HIT for query: '{query[:50]}...'")
+                    return ChatResponse(
+                        reply=cached_entry.response,
+                        userId=request.userId,
+                        sessionId=session_id,
+                        action="answer",
+                        model="cached"
+                    )
                 else:
                     print(f"❌ CACHE MISS for query: '{query[:50]}...'")
             except Exception as e:
                 print(f"⚠️  Cache lookup failed: {e}")
         
-        # If no cached response, call OpenAI LLM
-        if reply is None:
-            print(f"🤖 Calling LLM for query: '{query[:50]}...'")
+        # Use orchestrator if available, otherwise fallback to simple LLM
+        if orchestrator_available:
+            print(f"🤖 Using LangGraph Orchestrator for: '{query[:50]}...'")
+            
+            # Get conversation context from Redis (last 6 messages)
+            context_text = get_context(session_id, limit=6)
+            if context_text:
+                print(f"💭 Retrieved conversation context for session {session_id}")
+            
+            # Call orchestrator with context
+            result = handle_turn(
+                user_id=request.userId,
+                session_id=session_id,
+                text=query,
+                meta=request.meta,
+                context=context_text
+            )
+            
+            # Store this turn in Redis conversation context
+            intent = result.get("router", {}).get("intent", "unknown")
+            score = result.get("router", {}).get("score", 0.0)
+            
+            add_message(session_id, "user", query)
+            add_message(session_id, "assistant", result['reply'], intent, score)
+            print(f"💾 Stored conversation turn in Redis (session: {session_id})")
+            
+            # Store in cache if enabled and it's a final answer
+            if USE_LANGCACHE and cache_available and lang_cache and result.get("action") == "answer":
+                try:
+                    lang_cache.set(prompt=query, response=result["reply"])
+                    print(f"💾 Stored in cache: '{query[:50]}...'")
+                except Exception as e:
+                    print(f"⚠️  Failed to store in cache: {e}")
+            
+            # Show feedback when proposal is returned (task completed)
+            show_feedback = bool(result.get("proposal"))
+            
+            return ChatResponse(
+                reply=result["reply"],
+                userId=request.userId,
+                sessionId=session_id,
+                action=result.get("action"),
+                askedSlot=result.get("askedSlot"),
+                pending=result.get("pending"),
+                router=result.get("router"),
+                proposal=result.get("proposal"),
+                model=result.get("model"),
+                showFeedback=show_feedback
+            )
+        else:
+            # Fallback to simple OpenAI call
+            print(f"⚠️  Orchestrator unavailable, using fallback LLM")
             
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -117,26 +209,76 @@ async def chat(request: ChatRequest):
                 temperature=0.7
             )
             
-            # Extract the reply from OpenAI response
             reply = response.choices[0].message.content
             
-            # Store in cache if available
-            if cache_available and lang_cache:
+            # Store in cache if enabled
+            if USE_LANGCACHE and cache_available and lang_cache:
                 try:
                     lang_cache.set(prompt=query, response=reply)
                     print(f"💾 Stored in cache: '{query[:50]}...'")
                 except Exception as e:
                     print(f"⚠️  Failed to store in cache: {e}")
-        
-        return ChatResponse(
-            reply=reply,
-            userId=request.userId
-        )
+            
+            return ChatResponse(
+                reply=reply,
+                userId=request.userId,
+                sessionId=session_id,
+                action="answer",
+                model="gpt-3.5-turbo-fallback"
+            )
         
     except openai.APIError as e:
         raise HTTPException(status_code=500, detail=f"OpenAI API error: {str(e)}")
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+class FeedbackRequest(BaseModel):
+    sessionId: str
+    helpful: bool
+
+@app.post("/chat/feedback")
+async def chat_feedback(request: FeedbackRequest):
+    """
+    Handle user feedback. If helpful=true, clear the conversation to start fresh.
+    
+    Args:
+        request: Feedback request with sessionId and helpful flag
+        
+    Returns:
+        Success confirmation
+    """
+    if not request.sessionId or not request.sessionId.strip():
+        raise HTTPException(status_code=400, detail="Missing sessionId")
+    
+    try:
+        session_id = request.sessionId.strip()
+        
+        if request.helpful:
+            # Clear Redis-based conversation context
+            clear_conversation(session_id)
+            print(f"✅ User feedback: helpful=true, cleared Redis context for session {session_id}")
+            
+            return {
+                "ok": True,
+                "message": "Thank you! Conversation cleared for a fresh start.",
+                "cleared": True
+            }
+        else:
+            print(f"📊 User feedback: helpful={request.helpful}, session {session_id}")
+            return {
+                "ok": True,
+                "message": "Thank you for your feedback!",
+                "cleared": False
+            }
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to process feedback: {str(e)}")
+
 
 if __name__ == "__main__":
     import uvicorn

@@ -6,6 +6,17 @@ interface Message {
   id: string;
   text: string;
   sender: 'user' | 'assistant';
+  proposal?: {
+    bullets?: string[];
+    data?: Record<string, unknown>;
+  };
+  router?: {
+    intent?: string;
+    confidence?: string;
+    score?: number;
+  };
+  showFeedback?: boolean;
+  feedbackGiven?: boolean;
 }
 
 export default function ChatDock() {
@@ -13,6 +24,19 @@ export default function ChatDock() {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [sessionId, setSessionId] = useState<string>('');
+
+  // Initialize session ID
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      let sid = localStorage.getItem('chat_session_id');
+      if (!sid) {
+        sid = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        localStorage.setItem('chat_session_id', sid);
+      }
+      setSessionId(sid);
+    }
+  });
 
   const handleSend = async () => {
     if (!inputText.trim()) return;
@@ -36,7 +60,10 @@ export default function ChatDock() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text: currentInput }),
+        body: JSON.stringify({ 
+          text: currentInput,
+          sessionId: sessionId
+        }),
       });
 
       if (response.ok) {
@@ -44,7 +71,11 @@ export default function ChatDock() {
         const assistantMessage: Message = {
           id: (Date.now() + 1).toString(),
           text: data.reply || 'Sorry, I could not process your request.',
-          sender: 'assistant'
+          sender: 'assistant',
+          proposal: data.proposal,
+          router: data.router,
+          showFeedback: data.showFeedback || false,
+          feedbackGiven: false
         };
 
         // Add assistant reply to the list
@@ -58,7 +89,7 @@ export default function ChatDock() {
         };
         setMessages(prev => [...prev, errorMessage]);
       }
-    } catch (error) {
+    } catch {
       // Handle network error
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -74,6 +105,43 @@ export default function ChatDock() {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !isLoading) {
       handleSend();
+    }
+  };
+
+  const handleFeedback = async (messageId: string, helpful: boolean) => {
+    try {
+      // Send feedback to backend
+      const response = await fetch('http://localhost:8000/chat/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: sessionId,
+          helpful: helpful
+        })
+      });
+
+      if (response.ok) {
+        // Mark feedback as given for this message
+        setMessages(prev => 
+          prev.map(msg => 
+            msg.id === messageId 
+              ? { ...msg, feedbackGiven: true }
+              : msg
+          )
+        );
+
+        // If helpful, show a thank you message
+        if (helpful) {
+          const thankYouMessage: Message = {
+            id: Date.now().toString(),
+            text: 'Great! Your conversation has been cleared. Feel free to ask me anything else!',
+            sender: 'assistant'
+          };
+          setMessages(prev => [...prev, thankYouMessage]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to send feedback:', error);
     }
   };
 
@@ -102,23 +170,70 @@ export default function ChatDock() {
           <div className="flex-1 p-4 space-y-3 overflow-y-auto h-80 scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
             {messages.length === 0 ? (
               <div className="text-white/60 text-center py-8 text-sm">
-                💬 Hello! I'm your AI banking assistant. How can I help you today?
+                💬 Hello! I&apos;m your AI banking assistant. How can I help you today?
               </div>
             ) : (
               messages.map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                >
+                <div key={message.id}>
                   <div
-                    className={`max-w-xs px-3 py-2 rounded-xl text-sm font-medium ${
-                      message.sender === 'user'
-                        ? 'bg-gradient-accent text-dark-950 shadow-neon'
-                        : 'bg-glass-medium backdrop-blur-sm text-white border border-glass-light'
-                    }`}
+                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} mb-2`}
                   >
-                    {message.text}
+                    <div
+                      className={`max-w-sm px-3 py-2 rounded-xl text-sm font-medium ${
+                        message.sender === 'user'
+                          ? 'bg-gradient-accent text-dark-950 shadow-neon'
+                          : 'bg-glass-medium backdrop-blur-sm text-white border border-glass-light'
+                      }`}
+                    >
+                      {message.text}
+                    </div>
                   </div>
+                  
+                  {/* Show intent badge for assistant messages */}
+                  {message.sender === 'assistant' && message.router?.intent && (
+                    <div className="flex justify-start mb-2">
+                      <div className="px-2 py-1 bg-accent-neon/20 border border-accent-neon/40 rounded-md text-xs text-accent-neon">
+                        Intent: {message.router.intent} ({message.router.score?.toFixed(2)})
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Show proposal details */}
+                  {message.sender === 'assistant' && message.proposal?.bullets && (
+                    <div className="flex justify-start mb-2">
+                      <div className="max-w-sm bg-glass-dark border border-glass-light rounded-xl p-3 text-xs space-y-1">
+                        {message.proposal.bullets.slice(0, 5).map((bullet, idx) => (
+                          <div key={idx} className="text-white/80">{bullet}</div>
+                        ))}
+                        {message.proposal.bullets.length > 5 && (
+                          <div className="text-accent-neon text-xs italic">
+                            +{message.proposal.bullets.length - 5} more details
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Show feedback buttons */}
+                  {message.sender === 'assistant' && message.showFeedback && !message.feedbackGiven && (
+                    <div className="flex justify-start mb-2">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-glass-medium border border-glass-light rounded-xl">
+                        <span className="text-xs text-white/80">Was this helpful?</span>
+                        <button
+                          onClick={() => handleFeedback(message.id, true)}
+                          className="px-3 py-1 bg-green-500/20 hover:bg-green-500/30 border border-green-500/40 rounded-md text-xs text-green-400 transition-colors"
+                        >
+                          👍 Yes
+                        </button>
+                        <button
+                          onClick={() => handleFeedback(message.id, false)}
+                          className="px-3 py-1 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded-md text-xs text-red-400 transition-colors"
+                        >
+                          👎 No
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))
             )}

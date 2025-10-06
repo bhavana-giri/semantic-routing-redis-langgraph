@@ -125,7 +125,7 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-white/80 mb-2">Total Balance</p>
-                <p className="text-4xl font-bold text-white tracking-tight">$12,345.67</p>
+                <p className="text-4xl font-bold text-white tracking-tight">₹10,28,456.50</p>
               </div>
               <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -163,7 +163,7 @@ export default function Home() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-dark-950/80 mb-2">Monthly Spending</p>
-                <p className="text-4xl font-bold text-dark-950 tracking-tight">$2,890</p>
+                <p className="text-4xl font-bold text-dark-950 tracking-tight">₹2,40,720</p>
               </div>
               <div className="w-16 h-16 bg-dark-950/20 rounded-2xl flex items-center justify-center backdrop-blur-sm">
                 <svg className="w-8 h-8 text-dark-950" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,7 +192,7 @@ export default function Home() {
                   <p className="text-sm text-white/60">Yesterday</p>
                 </div>
               </div>
-              <span className="font-bold text-red-400 text-lg">-$89.99</span>
+              <span className="font-bold text-red-400 text-lg">-₹7,499</span>
             </div>
             <div className="flex justify-between items-center p-4 rounded-xl bg-glass-dark backdrop-blur-sm hover:bg-glass-medium transition-all duration-200">
               <div className="flex items-center">
@@ -204,7 +204,7 @@ export default function Home() {
                   <p className="text-sm text-white/60">3 days ago</p>
                 </div>
               </div>
-              <span className="font-bold text-primary-400 text-lg">+$3,500.00</span>
+              <span className="font-bold text-primary-400 text-lg">+₹2,91,500</span>
             </div>
             <div className="flex justify-between items-center p-4 rounded-xl bg-glass-dark backdrop-blur-sm hover:bg-glass-medium transition-all duration-200">
               <div className="flex items-center">
@@ -216,7 +216,7 @@ export default function Home() {
                   <p className="text-sm text-white/60">5 days ago</p>
                 </div>
               </div>
-              <span className="font-bold text-red-400 text-lg">-$127.45</span>
+              <span className="font-bold text-red-400 text-lg">-₹10,620</span>
             </div>
           </div>
         </div>
