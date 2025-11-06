@@ -1,16 +1,14 @@
-# Bank Semantic Router
+# Semantic Routing with Redis: A Banking Chatbot"
 
-An intelligent banking chatbot with semantic routing and slot-filling orchestration. Built with FastAPI, LangGraph, RedisVL Semantic Router, LangChain tools, and Next.js frontend.
+A banking chatbot with semantic routing and slot-filling orchestration. Built with FastAPI, LangGraph, RedisVL Semantic Router, LangChain tools, and Next.js frontend.
 
 ## Architecture
-
-This application uses a modern AI stack:
 
 - **Semantic Routing** (RedisVL): Routes queries to appropriate banking intents (loans, cards, FD, forex, etc.)
 - **Slot-Filling Orchestration** (LangGraph): Manages conversation state and collects required information
 - **Tool Execution** (LangChain): Executes banking operations (EMI calculation, card recommendations, etc.)
 - **Modern Frontend** (Next.js 14 + TypeScript + Tailwind): Responsive banking UI with chat interface
-- **Conversation Memory** (RedisVL MessageHistory): Structured conversation tracking with session management
+- **Conversation Memory** (RedisVL MessageHistory): Structured conversation tracking
 
 ## Quick Start
 
@@ -155,22 +153,7 @@ User feedback endpoint for conversation management.
 }
 ```
 
-### GET /health
-
-Health check endpoint.
-
-## Supported Banking Intents
-
-| Intent | Description | Required Slots | Tool |
-|--------|-------------|----------------|------|
-| **loan** | Personal/home/car/education loans | `loan_amount`, `tenure_months`, `interest_rate` | EMI Calculator |
-| **credit_card** | Credit card applications | `income`, `card_type` | Card Recommender |
-| **savings_fd** | Fixed deposits & savings | `amount`, `tenure` | FD Ladder Builder |
-| **forex_travel** | Foreign exchange & travel | `currency`, `amount` | Forex Rates |
-| **fraud_dispute** | Fraud reports & disputes | `transaction_id`, `description` | Fraud Handler |
-| **policy_faq** | Policies & FAQs | - | Policy Search (RAG) |
-
-## 💡 Example Conversations
+## Example Conversations
 
 ### Loan EMI Calculation
 ```
@@ -216,12 +199,6 @@ docker-compose up -d --build
 - **frontend**: Next.js app (port 3000)
 - **backend**: FastAPI app (port 8000) 
 - **redis**: Redis Stack for semantic routing (port 6380)
-
-### Features
-- **Hot Reload**: Code changes are reflected immediately
-- **Health Checks**: Services wait for dependencies to be healthy
-- **Volume Mounts**: Source code is mounted for development
-- **Environment Variables**: Loaded from `.env` file
 
 ### Docker Commands
 
@@ -308,6 +285,8 @@ User Query
          ↓
     [Memory Management] → Clear conversation if helpful
 ```
+<img width="2158" height="2034" alt="image" src="https://github.com/user-attachments/assets/a6cf4d14-2939-4818-9ad8-8c01b749549d" />
+
 
 ## Key Features
 
@@ -332,16 +311,6 @@ User Query
 - Automatic conversation clearing on positive feedback
 - Rich metadata storage (intent, score, timestamps)
 
-
-## User Feedback System
-
-After completing a task (showing a proposal/recommendation), the system asks "Was this helpful?" with Yes/No buttons. When the user clicks **Yes**, the conversation memory is automatically cleared for a fresh start.
-
-### Benefits
-**No stale data**: Old conversation context doesn't interfere with new requests  
-**User-controlled**: Clearing happens only when user confirms helpfulness  
-**Smooth UX**: Automatic "fresh start" without manual session management  
-**Feedback tracking**: Backend logs user satisfaction
 
 ## Troubleshooting
 
@@ -384,38 +353,6 @@ docker-compose down -v
 docker system prune -a
 ```
 
-## 📁 Project Structure
-
-```
-bank_semantic_router/
-├── main.py                    # FastAPI backend
-├── orchestrator.py            # LangGraph state machine
-├── router_bank.py             # Semantic router
-├── test_system.py             # System tests
-├── requirements.txt           # Python dependencies
-├── docker-compose.yml         # Docker orchestration
-├── Dockerfile.dev             # Backend Dockerfile
-├── .env                       # Environment variables
-├── memory/
-│   ├── __init__.py
-│   └── history.py             # RedisVL MessageHistory
-├── tools/                     # LangChain banking tools
-│   ├── __init__.py
-│   ├── loans.py              # EMI calculator
-│   ├── cards.py              # Card recommender
-│   ├── savings.py            # FD ladder builder
-│   ├── forex.py              # Forex rates
-│   ├── fraud.py              # Fraud handler
-│   └── policy_rag.py         # Policy search
-└── nextjs-app/               # Next.js frontend
-    ├── src/
-    │   ├── app/
-    │   └── components/
-    │       └── ChatDock.tsx  # Main chat component
-    ├── package.json
-    └── Dockerfile.dev        # Frontend Dockerfile
-```
-
 ## Dependencies
 
 ### Python (Backend)
@@ -439,7 +376,7 @@ bank_semantic_router/
 
 ## Result
 
-A production-ready intelligent banking assistant that:
+A production-ready banking assistant that:
 - Routes queries semantically
 - Collects information through conversation
 - Executes banking operations
