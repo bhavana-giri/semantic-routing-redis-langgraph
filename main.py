@@ -6,8 +6,6 @@ from typing import Optional
 import openai
 from dotenv import load_dotenv
 
-# LangCache removed - using semantic routing and conversation memory only
-
 # Load environment variables
 load_dotenv()
 
@@ -15,10 +13,10 @@ load_dotenv()
 try:
     from memory.history import add_message, get_context, clear_conversation
     memory_available = True
-    print("✅ Redis-based conversation memory initialized")
+    print("Redis-based conversation memory initialized")
 except ImportError:
     memory_available = False
-    print("⚠️  Memory system not available")
+    print("Memory system not available")
     # Fallback functions
     def add_message(session_id, role, text, intent="unknown", score=0.0):
         pass
@@ -50,7 +48,7 @@ try:
     orchestrator_available = True
 except ImportError as e:
     orchestrator_available = False
-    print(f"⚠️  Orchestrator not available: {e}")
+    print(f"Orchestrator not available: {e}")
 
 # Pydantic models
 class ChatRequest(BaseModel):
@@ -93,12 +91,12 @@ async def chat(request: ChatRequest):
         
         # Use orchestrator if available, otherwise fallback to simple LLM
         if orchestrator_available:
-            print(f"🤖 Using LangGraph Orchestrator for: '{query[:50]}...'")
+            print(f"Using LangGraph Orchestrator for: '{query[:50]}...'")
             
             # Get conversation context from Redis (last 6 messages)
             context_text = get_context(session_id, limit=6)
             if context_text:
-                print(f"💭 Retrieved conversation context for session {session_id}")
+                print(f"Retrieved conversation context for session {session_id}")
             
             # Call orchestrator with context
             result = handle_turn(
@@ -114,7 +112,7 @@ async def chat(request: ChatRequest):
             
             add_message(session_id, "user", query)
             add_message(session_id, "assistant", result['reply'], intent, score)
-            print(f"💾 Stored conversation turn in Redis (session: {session_id})")
+            print(f"Stored conversation turn in Redis (session: {session_id})")
             
             # LangCache storage removed
             
@@ -132,7 +130,7 @@ async def chat(request: ChatRequest):
             )
         else:
             # Fallback to simple OpenAI call
-            print(f"⚠️  Orchestrator unavailable, using fallback LLM")
+            print(f"Orchestrator unavailable, using fallback LLM")
             
             response = openai.chat.completions.create(
                 model="gpt-3.5-turbo",
@@ -192,7 +190,7 @@ async def chat_feedback(request: FeedbackRequest):
         if request.helpful:
             # Clear Redis-based conversation context
             clear_conversation(session_id)
-            print(f"✅ User feedback: helpful=true, cleared Redis context for session {session_id}")
+            print(f"User feedback: helpful=true, cleared Redis context for session {session_id}")
             
             return {
                 "ok": True,
@@ -200,7 +198,7 @@ async def chat_feedback(request: FeedbackRequest):
                 "cleared": True
             }
         else:
-            print(f"📊 User feedback: helpful={request.helpful}, session {session_id}")
+            print(f"User feedback: helpful={request.helpful}, session {session_id}")
             return {
                 "ok": True,
                 "message": "Thank you for your feedback!",
